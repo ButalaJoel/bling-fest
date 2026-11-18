@@ -20,11 +20,11 @@ export default function Announcements() {
     if (!edit) return
     if (edit.title.trim().length < 2 || !edit.body.trim()) return setMsg({ tone: 'bad', text: 'Add a title and a message.' })
     try { await saveAnnouncement(edit); setEdit(null); setMsg({ tone: 'ok', text: 'Saved.' }); load() }
-    catch { setMsg({ tone: 'bad', text: 'Not saved (reviewers cannot publish).' }) }
+    catch (e) { setMsg({ tone: 'bad', text: (e as Error).message }) }
   }
   async function onDelete(a: AdminAnnouncement) {
     if (!window.confirm(`Delete "${a.title}"?`)) return
-    try { await deleteAnnouncement(a.id); load() } catch { setMsg({ tone: 'bad', text: 'Not deleted.' }) }
+    try { await deleteAnnouncement(a.id); load() } catch (e) { setMsg({ tone: 'bad', text: (e as Error).message }) }
   }
 
   return (

@@ -1,47 +1,50 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import type { Session } from '@supabase/supabase-js'
-import { supabase } from './supabase'
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
+import { api } from './api'
+
+export type Role = 'owner' | 'admin' | 'reviewer'
+export type Admin = { id: string; email: string; name: string; role: Role }
 
 type AuthState = {
-  session: Session | null | undefined // undefined = still loading
-  isAdmin: boolean | null // null = not checked yet
+  admin: Admin | null | undefined // undefined = still checking
+  signIn: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
+  refresh: () => Promise<void>
 }
 
-const AuthContext = createContext<AuthState>({ session: null, isAdmin: false, signOut: async () => {} })
+const AuthContext = createContext<AuthState>({ admin: null, signIn: async () => {}, signOut: async () => {}, refresh: async () => {} })
 
+// The session lives in an httpOnly cookie the page can't read; we ask the server who we are.
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null | undefined>(supabase ? undefined : null)
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null)
+  const [admin, setAdmin] = useState<Admin | null | undefined>(undefined)
 
-  useEffect(() => {
-    if (!supabase) return
-    supabase.auth.getSession().then(({ data }) => setSession(data.session))
-    const { data } = supabase.auth.onAuthStateChange((_e, s) => setSession(s))
-    return () => data.subscription.unsubscribe()
+  const refresh = useCallback(async () => {
+    try {
+      const r = await api<{ admin: Admin }>('/auth/me')
+      setAdmin(r.admin)
+    } catch {
+      setAdmin(null)
+    }
   }, [])
 
   useEffect(() => {
-    let live = true
-    if (!supabase || !session) {
-      setIsAdmin(session === null ? false : null)
-      return
-    }
-    setIsAdmin(null)
-    // The UI check is only for routing. The real lock is Row Level Security in the database.
-    supabase.rpc('is_admin').then(({ data, error }) => {
-      if (live) setIsAdmin(!error && data === true)
-    })
-    return () => { live = false }
-  }, [session])
+    refresh()
+    const onOut = () => setAdmin(null)
+    window.addEventListener('bf:signed-out', onOut)
+    return () => window.removeEventListener('bf:signed-out', onOut)
+  }, [refresh])
 
+  const signIn = async (email: string, password: string) => {
+    await api('/auth/login', { method: 'POST', body: { email, password } })
+    await refresh()
+  }
   const signOut = async () => {
-    await supabase?.auth.signOut()
-    setSession(null)
+    await api('/auth/logout', { method: 'POST' }).catch(() => {})
+    setAdmin(null)
   }
 
-  return <AuthContext.Provider value={{ session, isAdmin, signOut }}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={{ admin, signIn, signOut, refresh }}>{children}</AuthContext.Provider>
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext)
+export const canManage = (a: Admin | null | undefined) => a?.role === 'owner' || a?.role === 'admin'

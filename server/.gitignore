@@ -1,0 +1,10 @@
+# Never commit installed dependencies or compiled output.
+node_modules/
+dist/
+
+# Never commit secrets or environment-specific configuration.
+.env
+.env.*
+!.env.example
+# Local development photo storage
+.uploads/

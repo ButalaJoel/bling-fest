@@ -14,7 +14,7 @@ export default function Vendors() {
 
   async function toggle(v: VendorRow, key: 'is_active' | 'is_featured') {
     setErr('')
-    try { await updateVendor(v.id, { [key]: !v[key] }); await load() } catch { setErr('Only admins can change vendors.') }
+    try { await updateVendor(v.id, { [key]: !v[key] }); await load() } catch (e) { setErr((e as Error).message) }
   }
 
   const cats = [...new Set((rows ?? []).map((r) => r.category))]

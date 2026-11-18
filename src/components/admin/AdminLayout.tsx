@@ -1,10 +1,8 @@
 import { useState } from 'react'
 import { Link, NavLink, Navigate, Outlet } from 'react-router-dom'
-import { CalendarDays, FileText, LayoutDashboard, Loader2, LogOut, Menu, Megaphone, Store, X } from 'lucide-react'
+import { CalendarDays, FileText, KeyRound, LayoutDashboard, Loader2, LogOut, Menu, Megaphone, Store, X } from 'lucide-react'
 import { useAuth } from '../../lib/auth'
-import { isConnected } from '../../lib/supabase'
 import Wordmark from '../layout/Wordmark'
-import Button from '../ui/Button'
 
 const items = [
   { to: '/admin', label: 'Overview', icon: LayoutDashboard, end: true },
@@ -12,23 +10,16 @@ const items = [
   { to: '/admin/vendors', label: 'Vendors', icon: Store },
   { to: '/admin/events', label: 'Events', icon: CalendarDays },
   { to: '/admin/announcements', label: 'Announcements', icon: Megaphone },
+  { to: '/admin/account', label: 'Account', icon: KeyRound },
 ]
 
-// Gate flow adapted from nova-works AdminApp: not connected -> setup; signed out -> sign-in;
-// signed in but not on the admin list -> no access. The database enforces the same rules.
+// Gate flow adapted from nova-works AdminApp. The server enforces the same rules on every request.
 export default function AdminLayout() {
-  const { session, isAdmin, signOut } = useAuth()
+  const { admin, signOut } = useAuth()
   const [open, setOpen] = useState(false)
 
-  if (!isConnected) return <Gate title="Connect the database"><p>Add <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> to <code>.env.local</code> (and Vercel), then run <code>supabase/schema.sql</code>. See the README.</p></Gate>
-  if (session === undefined || (session && isAdmin === null)) return <div className="flex min-h-dvh items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-purple" /></div>
-  if (!session) return <Navigate to="/sign-in" replace />
-  if (!isAdmin) return (
-    <Gate title="No access">
-      <p>{session.user.email} is signed in but isn't on the Bling Fest admin list.</p>
-      <Button onClick={signOut} variant="outline" className="mt-5">Sign out</Button>
-    </Gate>
-  )
+  if (admin === undefined) return <div className="flex min-h-dvh items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-purple" /></div>
+  if (!admin) return <Navigate to="/sign-in" replace />
 
   return (
     <div className="min-h-dvh bg-cream lg:grid lg:grid-cols-[240px_1fr]">
@@ -47,7 +38,8 @@ export default function AdminLayout() {
           ))}
         </nav>
         <div className="absolute inset-x-0 bottom-0 space-y-2 border-t border-cream/10 p-4 text-xs">
-          <p className="truncate text-cream/60">{session.user.email}</p>
+          <p className="truncate text-cream/60">{admin.email}</p>
+          <p className="wide text-[9px] text-orange">{admin.role}</p>
           <div className="flex gap-3">
             <Link to="/" className="font-bold hover:text-orange">View site</Link>
             <button onClick={signOut} className="inline-flex items-center gap-1 font-bold hover:text-orange"><LogOut className="h-3.5 w-3.5" />Sign out</button>
@@ -61,19 +53,6 @@ export default function AdminLayout() {
           <span className="wide text-xs">Admin</span>
         </header>
         <main className="p-4 sm:p-6 lg:p-8"><Outlet /></main>
-      </div>
-    </div>
-  )
-}
-
-function Gate({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="flex min-h-dvh items-center justify-center bg-cream p-4">
-      <div className="hard w-full max-w-md border-2 border-ink bg-white p-7">
-        <Wordmark />
-        <h1 className="display mt-4 text-4xl">{title}</h1>
-        <div className="mt-3 text-sm text-ink-soft [&_code]:rounded [&_code]:bg-cream-deep [&_code]:px-1">{children}</div>
-        <Link to="/" className="mt-6 block text-sm font-bold underline">Back to the site</Link>
       </div>
     </div>
   )

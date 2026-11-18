@@ -1,12 +1,11 @@
-import { supabase } from './supabase'
+import { api } from './api'
 import { SITE } from '../config/site'
 
-// Public reads. Only columns granted to the anon role are requested (never select('*') on vendors).
+// Public reads. The server only ever returns public columns.
 export type PublicVendor = {
   id: string; slug: string; name: string; participation: string; category: string
   location: string | null; bio: string | null; whatsapp: string | null; social_link: string | null; is_featured: boolean
 }
-const VENDOR_COLS = 'id, slug, name, participation, category, location, bio, whatsapp, social_link, is_featured'
 
 export type EventRow = { id: string; slug: string; title: string; theme: string | null; starts_on: string; ends_on: string; city: string; venue: string | null; summary: string | null }
 export type Announcement = { id: string; title: string; body: string; published_at: string }
@@ -18,27 +17,20 @@ export const FALLBACK_EVENT: EventRow = {
 }
 
 export async function fetchVendors(): Promise<PublicVendor[]> {
-  if (!supabase) return []
-  const { data, error } = await supabase.from('vendors').select(VENDOR_COLS).eq('is_active', true).order('is_featured', { ascending: false }).order('name')
-  return error ? [] : (data as PublicVendor[])
+  return api<PublicVendor[]>('/vendors').catch(() => [])
 }
 
 export async function fetchVendor(slug: string): Promise<PublicVendor | null> {
-  if (!supabase) return null
-  const { data } = await supabase.from('vendors').select(VENDOR_COLS).eq('slug', slug).eq('is_active', true).maybeSingle()
-  return (data as PublicVendor) ?? null
+  return api<PublicVendor>(`/vendors/${encodeURIComponent(slug)}`).catch(() => null)
 }
 
 export async function fetchEvents(): Promise<EventRow[]> {
-  if (!supabase) return [FALLBACK_EVENT]
-  const { data, error } = await supabase.from('events').select('id, slug, title, theme, starts_on, ends_on, city, venue, summary').eq('is_published', true).order('starts_on')
-  return error || !data?.length ? [FALLBACK_EVENT] : (data as EventRow[])
+  const rows = await api<EventRow[]>('/events').catch(() => [])
+  return rows.length ? rows : [FALLBACK_EVENT]
 }
 
 export async function fetchAnnouncements(): Promise<Announcement[]> {
-  if (!supabase) return []
-  const { data, error } = await supabase.from('announcements').select('id, title, body, published_at').eq('is_published', true).order('published_at', { ascending: false }).limit(20)
-  return error ? [] : (data as Announcement[])
+  return api<Announcement[]>('/announcements').catch(() => [])
 }
 
 export function formatRange(a: string, b: string) {

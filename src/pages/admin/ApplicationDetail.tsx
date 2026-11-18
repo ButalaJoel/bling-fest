@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, CheckCircle2, ExternalLink, Loader2, Mail, Phone, XCircle } from 'lucide-react'
-import { addNote, getApplication, listNotes, setStatus, signedPhotos, type Application, type Note } from '../../lib/admin'
+import { addNote, getApplication, setStatus, type Application } from '../../lib/admin'
+import { canManage, useAuth } from '../../lib/auth'
 import { STATUSES, participationLabel, type AppStatus } from '../../config/site'
 import { formatDateTime, safeUrl, toWaNumber, whatsappLink } from '../../lib/format'
 import StatusBadge from '../../components/admin/StatusBadge'
@@ -13,8 +14,8 @@ import { usePageTitle } from '../../lib/usePageTitle'
 export default function ApplicationDetail() {
   const { id = '' } = useParams()
   const [app, setApp] = useState<Application | null | undefined>(undefined)
-  const [photos, setPhotos] = useState<string[]>([])
-  const [notes, setNotes] = useState<Note[]>([])
+  const { admin } = useAuth()
+  const manager = canManage(admin)
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const [msg, setMsg] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null)
@@ -23,12 +24,7 @@ export default function ApplicationDetail() {
 
   const load = useCallback(async () => {
     try {
-      const a = await getApplication(id)
-      setApp(a)
-      if (a) {
-        setNotes(await listNotes(id))
-        setPhotos(await signedPhotos(a.photo_paths).catch(() => []))
-      }
+      setApp(await getApplication(id))
     } catch { setApp(null) }
   }, [id])
   useEffect(() => { load() }, [load])
@@ -38,11 +34,11 @@ export default function ApplicationDetail() {
     if ((s === 'approved' || s === 'rejected') && !window.confirm(`Mark ${app.brand_name} as ${s}?`)) return
     setBusy(s); setMsg(null)
     try {
-      await setStatus(app.id, s)
+      const r = await setStatus(app.id, s)
       await load()
-      setMsg({ tone: 'ok', text: s === 'approved' ? 'Approved. A hidden vendor profile was created — publish it from Vendors.' : 'Status updated.' })
-    } catch {
-      setMsg({ tone: 'bad', text: "Couldn't update. Reviewers can add notes but only admins change status." })
+      setMsg({ tone: 'ok', text: r.vendorCreated ? 'Approved. A hidden vendor profile was created — publish it from Vendors.' : 'Status updated.' })
+    } catch (e) {
+      setMsg({ tone: 'bad', text: (e as Error).message })
     }
     setBusy(null)
   }
@@ -51,7 +47,7 @@ export default function ApplicationDetail() {
     e.preventDefault()
     if (!note.trim()) return
     setBusy('note')
-    try { await addNote(id, note); setNote(''); setNotes(await listNotes(id)) } catch { setMsg({ tone: 'bad', text: 'Note not saved.' }) }
+    try { await addNote(id, note); setNote(''); await load() } catch (e) { setMsg({ tone: 'bad', text: (e as Error).message }) }
     setBusy(null)
   }
 
@@ -92,10 +88,10 @@ export default function ApplicationDetail() {
             {app.additional_info && <><h3 className="mt-4 text-sm font-bold">Additional information</h3><p className="mt-1 whitespace-pre-line text-sm">{app.additional_info}</p></>}
           </section>
           <section className="hard-sm border-2 border-ink bg-white p-5">
-            <h2 className="display text-2xl">Photos ({app.photo_paths.length})</h2>
-            {app.photo_paths.length === 0 ? <p className="mt-2 text-sm text-ink-soft">No photos submitted.</p> : (
+            <h2 className="display text-2xl">Photos ({app.photos.length})</h2>
+            {app.photos.length === 0 ? <p className="mt-2 text-sm text-ink-soft">No photos submitted.</p> : (
               <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
-                {photos.map((src, i) => (
+                {app.photos.map((src, i) => (
                   <button key={src} onClick={() => setZoom(src)} className="aspect-square overflow-hidden border-2 border-ink"><img src={src} alt={`Submitted photo ${i + 1}`} className="h-full w-full object-cover" /></button>
                 ))}
               </div>
@@ -106,7 +102,8 @@ export default function ApplicationDetail() {
         <div className="space-y-6">
           <section className="hard-sm border-2 border-ink bg-white p-5">
             <h2 className="display text-2xl">Decision</h2>
-            <div className="mt-3 grid grid-cols-2 gap-2">
+            {!manager && <p className="mt-2 text-sm text-ink-soft">Reviewers can read applications and add notes. An owner or admin makes the decision.</p>}
+            {manager && <><div className="mt-3 grid grid-cols-2 gap-2">
               <Button variant="purple" size="sm" onClick={() => changeStatus('under_review')} disabled={!!busy || app.status === 'under_review'}>Under review</Button>
               <Button variant="outline" size="sm" onClick={() => changeStatus('pending')} disabled={!!busy || app.status === 'pending'}>Pending</Button>
               <Button variant="ink" size="sm" className="!bg-ok" onClick={() => changeStatus('approved')} disabled={!!busy || app.status === 'approved'}>
@@ -120,7 +117,7 @@ export default function ApplicationDetail() {
               <select value={app.status} onChange={(e) => changeStatus(e.target.value as AppStatus)} disabled={!!busy} className="mt-1 w-full border-2 border-ink bg-white px-3 py-2 text-sm">
                 {STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
-            </label>
+            </label></>}
             {app.reviewed_by && <p className="mt-3 text-xs text-ink-soft">Last changed by {app.reviewed_by}{app.reviewed_at ? ` on ${formatDateTime(app.reviewed_at)}` : ''}</p>}
           </section>
 
@@ -128,8 +125,8 @@ export default function ApplicationDetail() {
             <h2 className="display text-2xl">Internal notes</h2>
             <p className="text-xs text-ink-soft">Only the admin team sees these.</p>
             <ul className="mt-3 space-y-3">
-              {notes.length === 0 && <li className="text-sm text-ink-soft">No notes yet.</li>}
-              {notes.map((n) => (
+              {app.notes.length === 0 && <li className="text-sm text-ink-soft">No notes yet.</li>}
+              {app.notes.map((n) => (
                 <li key={n.id} className="border-l-4 border-purple bg-cream p-3 text-sm">
                   <p className="whitespace-pre-line">{n.body}</p>
                   <p className="mt-1 text-[11px] text-ink-soft">{n.author_email ?? 'Admin'} • {formatDateTime(n.created_at)}</p>

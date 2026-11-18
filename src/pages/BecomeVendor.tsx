@@ -8,7 +8,6 @@ import Notice from '../components/ui/Notice'
 import { Select, TextArea, TextInput } from '../components/forms/Field'
 import { BUSINESS_CATEGORIES, PARTICIPATION } from '../config/site'
 import { PHOTO_LIMITS, checkPhotos, submitApplication, validate, type ApplicationInput, type Errors } from '../lib/applications'
-import { isConnected } from '../lib/supabase'
 import { usePageTitle } from '../lib/usePageTitle'
 
 const EMPTY: ApplicationInput = {
@@ -69,13 +68,17 @@ export default function BecomeVendor() {
       return
     }
     setBusy(true)
-    const res = await submitApplication(v, photos, setProgress)
+    setProgress(photos.length ? 'Uploading photos…' : 'Sending…')
+    const res = await submitApplication(v, photos)
     setBusy(false)
     setProgress('')
     if (res.ok) {
       setDone(res.reference)
       topRef.current?.scrollIntoView({ behavior: 'smooth' })
-    } else setServerError(res.error)
+    } else {
+      setServerError(res.error)
+      if (res.field) setErrors((e) => ({ ...e, [res.field as keyof Errors]: res.error }))
+    }
   }
 
   if (done) {
@@ -106,7 +109,6 @@ export default function BecomeVendor() {
 
       <Container className="py-10 sm:py-14">
         <form onSubmit={onSubmit} noValidate className="mx-auto max-w-3xl space-y-10">
-          {!isConnected && <Notice>Online applications open as soon as the database is connected. You can fill this in to preview it.</Notice>}
 
           {/* 1. Participation */}
           <fieldset>
@@ -193,7 +195,7 @@ export default function BecomeVendor() {
 
           <div className="flex flex-col items-start gap-3 border-t-2 border-ink pt-6 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-ink-soft">Participation fees and packages will be announced by the organisers. <Link to="/events" className="underline">Event info</Link></p>
-            <Button type="submit" size="lg" disabled={busy || !isConnected} className="w-full sm:w-auto">
+            <Button type="submit" size="lg" disabled={busy} className="w-full sm:w-auto">
               {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> {progress || 'Sending…'}</> : 'Submit application'}
             </Button>
           </div>

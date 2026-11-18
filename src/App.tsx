@@ -12,7 +12,6 @@ import Community from './pages/Community'
 import Events from './pages/Events'
 import BecomeVendor from './pages/BecomeVendor'
 import SignIn from './pages/SignIn'
-import ResetPassword from './pages/ResetPassword'
 import NotFound from './pages/NotFound'
 
 // Admin code is split into its own chunk: public visitors never download it.
@@ -23,6 +22,7 @@ const ApplicationDetail = lazy(() => import('./pages/admin/ApplicationDetail'))
 const Vendors = lazy(() => import('./pages/admin/Vendors'))
 const AdminEvents = lazy(() => import('./pages/admin/Events'))
 const Announcements = lazy(() => import('./pages/admin/Announcements'))
+const Account = lazy(() => import('./pages/admin/Account'))
 
 export default function App() {
   return (
@@ -41,7 +41,6 @@ export default function App() {
               <Route path="events" element={<Events />} />
               <Route path="become-a-vendor" element={<BecomeVendor />} />
               <Route path="sign-in" element={<SignIn />} />
-              <Route path="reset-password" element={<ResetPassword />} />
               <Route path="*" element={<NotFound />} />
             </Route>
             <Route path="admin" element={<AdminLayout />}>
@@ -51,6 +50,7 @@ export default function App() {
               <Route path="vendors" element={<Vendors />} />
               <Route path="events" element={<AdminEvents />} />
               <Route path="announcements" element={<Announcements />} />
+              <Route path="account" element={<Account />} />
             </Route>
           </Routes>
         </Suspense>

@@ -1,9 +1,8 @@
-import { db, isConnected } from './supabase'
+import { api, type ApiError } from './api'
 import { isEmail, isPhone, safeUrl } from './format'
 import { PARTICIPATION, BUSINESS_CATEGORIES } from '../config/site'
 
 export const PHOTO_LIMITS = { max: 6, bytes: 5 * 1024 * 1024, types: ['image/jpeg', 'image/png', 'image/webp'] as const }
-const EXT: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }
 
 export type ApplicationInput = {
   participation: string
@@ -52,49 +51,27 @@ export function checkPhotos(files: File[]): string | null {
   return null
 }
 
-const rand = () => Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => (b % 36).toString(36)).join('') + Date.now().toString(36).slice(-4)
-export const referenceFor = (id: string) => id.replace(/-/g, '').slice(0, 8).toUpperCase()
+export type SubmitResult = { ok: true; reference: string } | { ok: false; error: string; field?: string }
 
-export type SubmitResult = { ok: true; reference: string } | { ok: false; error: string }
-
-export async function submitApplication(v: ApplicationInput, photos: File[], onProgress?: (msg: string) => void): Promise<SubmitResult> {
-  if (!isConnected) return { ok: false, error: 'Applications open as soon as the site is connected. Please check back shortly.' }
-  const supabase = db()
-  const id = crypto.randomUUID()
-  const paths: string[] = []
-
+export async function submitApplication(v: ApplicationInput, photos: File[]): Promise<SubmitResult> {
+  const form = new FormData()
+  form.set('participation', v.participation)
+  form.set('brand_name', v.brand_name.trim())
+  form.set('full_name', v.full_name.trim())
+  form.set('email', v.email.trim().toLowerCase())
+  form.set('phone', v.phone.trim())
+  form.set('location', v.location.trim())
+  form.set('business_category', v.business_category)
+  form.set('description', v.description.trim())
+  form.set('social_link', v.social_link.trim())
+  form.set('additional_info', v.additional_info.trim())
+  form.set('consent', String(v.consent))
+  for (const p of photos) form.append('photos', p)
   try {
-    for (const [i, file] of photos.entries()) {
-      onProgress?.(`Uploading photo ${i + 1} of ${photos.length}…`)
-      const path = `submissions/${id}/${i}-${rand()}.${EXT[file.type]}`
-      const { error } = await supabase.storage.from('applications').upload(path, file, { contentType: file.type, upsert: false, cacheControl: '3600' })
-      if (error) return { ok: false, error: 'A photo failed to upload. Check your connection and try again.' }
-      paths.push(path)
-    }
-
-    onProgress?.('Sending your application…')
-    const { error } = await supabase.from('applications').insert({
-      id,
-      participation: v.participation,
-      brand_name: v.brand_name.trim(),
-      full_name: v.full_name.trim(),
-      email: v.email.trim().toLowerCase(),
-      phone: v.phone.trim(),
-      location: v.location.trim(),
-      business_category: v.business_category,
-      description: v.description.trim(),
-      social_link: safeUrl(v.social_link),
-      additional_info: v.additional_info.trim() || null,
-      photo_paths: paths,
-      consent: v.consent,
-    })
-    if (error) {
-      // Rate-limit and validation messages from the database are written for applicants.
-      if (error.code === 'P0001') return { ok: false, error: error.message }
-      return { ok: false, error: 'We could not send your application. Please check the form and try again.' }
-    }
-    return { ok: true, reference: referenceFor(id) }
-  } catch {
-    return { ok: false, error: 'No connection. Please check your internet and try again.' }
+    const r = await api<{ reference: string }>('/applications', { method: 'POST', form })
+    return { ok: true, reference: r.reference }
+  } catch (e) {
+    const err = e as ApiError
+    return { ok: false, error: err.message, field: err.field }
   }
 }

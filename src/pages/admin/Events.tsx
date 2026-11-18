@@ -7,7 +7,6 @@ import Notice from '../../components/ui/Notice'
 import { TextArea, TextInput } from '../../components/forms/Field'
 
 const blank: Omit<AdminEvent, 'id'> & { id?: string } = { slug: '', title: 'BLING FEST', theme: '', starts_on: '', ends_on: '', city: 'Kampala, Uganda', venue: '', summary: '', is_published: false }
-const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 
 export default function AdminEvents() {
   const [rows, setRows] = useState<AdminEvent[] | null>(null)
@@ -20,9 +19,8 @@ export default function AdminEvents() {
     e.preventDefault()
     if (!edit) return
     if (!edit.starts_on || !edit.ends_on || edit.ends_on < edit.starts_on) return setMsg({ tone: 'bad', text: 'Check the dates: the end date cannot be before the start.' })
-    const slug = edit.slug || slugify(`${edit.title}-${edit.starts_on}`)
-    try { await saveEvent({ ...edit, slug }); setEdit(null); setMsg({ tone: 'ok', text: 'Event saved.' }); load() }
-    catch { setMsg({ tone: 'bad', text: 'Not saved. Check the fields (and that you are an admin, not a reviewer).' }) }
+    try { await saveEvent(edit); setEdit(null); setMsg({ tone: 'ok', text: 'Event saved.' }); load() }
+    catch (err) { setMsg({ tone: 'bad', text: (err as Error).message }) }
   }
 
   const f = <K extends keyof typeof blank>(k: K, v: (typeof blank)[K]) => setEdit((s) => (s ? { ...s, [k]: v } : s))
