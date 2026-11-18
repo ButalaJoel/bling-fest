@@ -44,6 +44,12 @@ Without Cloudinary settings, application photos are saved in `server/.uploads` (
    ```
 5. Open the site → **Sign In**. Add your domain under the service's **Settings → Custom Domains**.
 
+## Bot protection (CAPTCHA) — optional, recommended before promoting the vendor link
+
+1. dash.cloudflare.com (free account) → **Turnstile** → **Add widget**. Hostnames: `bling-fest.onrender.com` (+ your own domain later). Mode: **Managed**.
+2. Render → `bling-fest` → **Environment** → add `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` → **Save**. It redeploys by itself.
+3. The vendor form now shows an "I'm human" check. Set both keys or neither (the server refuses to start with only one).
+
 ## Team accounts
 
 Managed from the Render Shell (never from the website):

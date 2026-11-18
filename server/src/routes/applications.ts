@@ -7,6 +7,7 @@ import { BUSINESS_CATEGORIES, PARTICIPATION, PHOTO } from "../lib/constants.js";
 import { deleteCloudinaryPhotos, savePhoto, sniffImage, storageMode } from "../lib/storage.js";
 import { readEmail, readOneOf, readPhone, readText, readUrl, ValidationError } from "../lib/validation.js";
 import { limitApplications } from "../middleware/rateLimits.js";
+import { verifyCaptcha } from "../lib/captcha.js";
 
 // Upload handling adapted from vana-power-mart/server/src/routes/uploads.ts:
 // memory storage, strict size/count limits, then the real type is checked from the bytes.
@@ -47,6 +48,11 @@ router.post("/", limitApplications, upload.array("photos", PHOTO.maxFiles), asyn
   } catch (e) {
     if (e instanceof ValidationError) return void res.status(400).json({ success: false, message: e.message, field: e.field });
     throw e;
+  }
+
+  // Bot check before any photo is stored. Tokens are single-use.
+  if (!(await verifyCaptcha(b["cf-turnstile-response"], req.ip))) {
+    return void res.status(400).json({ success: false, field: "captcha", message: "Please complete the \"I'm human\" check and try again." });
   }
 
   const files = (req.files as Express.Multer.File[] | undefined) ?? [];

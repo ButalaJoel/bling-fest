@@ -7,7 +7,8 @@ import Button from '../components/ui/Button'
 import Notice from '../components/ui/Notice'
 import { Select, TextArea, TextInput } from '../components/forms/Field'
 import { BUSINESS_CATEGORIES, PARTICIPATION } from '../config/site'
-import { PHOTO_LIMITS, checkPhotos, submitApplication, validate, type ApplicationInput, type Errors } from '../lib/applications'
+import { PHOTO_LIMITS, checkPhotos, fetchCaptchaSiteKey, submitApplication, validate, type ApplicationInput, type Errors } from '../lib/applications'
+import Turnstile, { type TurnstileHandle } from '../components/forms/Turnstile'
 import { usePageTitle } from '../lib/usePageTitle'
 
 const EMPTY: ApplicationInput = {
@@ -37,7 +38,11 @@ export default function BecomeVendor() {
   const [progress, setProgress] = useState('')
   const [serverError, setServerError] = useState('')
   const [done, setDone] = useState<string | null>(null)
+  const [siteKey, setSiteKey] = useState<string | null>(null)
+  const [captchaToken, setCaptchaToken] = useState('')
+  const captchaRef = useRef<TurnstileHandle>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  useEffect(() => { fetchCaptchaSiteKey().then(setSiteKey) }, [])
   const topRef = useRef<HTMLDivElement>(null)
 
   const previews = useMemo(() => photos.map((f) => URL.createObjectURL(f)), [photos])
@@ -61,15 +66,16 @@ export default function BecomeVendor() {
     e.preventDefault()
     setServerError('')
     const errs = validate(v, photos)
+    if (siteKey && !captchaToken) errs.captcha = 'Please tick the "I\'m human" check.'
     setErrors(errs)
-    const first = Object.keys(errs)[0]
+    const first = Object.keys(errs).filter((k) => k !== 'captcha')[0] ?? (errs.captcha ? 'captcha' : undefined)
     if (first) {
-      document.getElementById(first === 'photos' ? 'photos' : first === 'participation' ? 'participation' : first)?.focus()
+      document.getElementById(first)?.focus()
       return
     }
     setBusy(true)
     setProgress(photos.length ? 'Uploading photos…' : 'Sending…')
-    const res = await submitApplication(v, photos)
+    const res = await submitApplication(v, photos, captchaToken)
     setBusy(false)
     setProgress('')
     if (res.ok) {
@@ -77,6 +83,7 @@ export default function BecomeVendor() {
       topRef.current?.scrollIntoView({ behavior: 'smooth' })
     } else {
       setServerError(res.error)
+      captchaRef.current?.reset() // tokens are single-use
       if (res.field) setErrors((e) => ({ ...e, [res.field as keyof Errors]: res.error }))
     }
   }
@@ -189,6 +196,15 @@ export default function BecomeVendor() {
             </label>
             {errors.consent && <p className="text-xs font-semibold text-bad">{errors.consent}</p>}
           </fieldset>
+
+          {siteKey && (
+            <div id="captcha" tabIndex={-1}>
+              <Turnstile ref={captchaRef} siteKey={siteKey}
+                onToken={(t) => { setCaptchaToken(t); if (t) setErrors((e) => ({ ...e, captcha: undefined })) }}
+                onError={() => setErrors((e) => ({ ...e, captcha: "The \"I'm human\" check didn't load. Refresh the page and try again." }))} />
+              {errors.captcha && <p className="mt-1 text-xs font-semibold text-bad">{errors.captcha}</p>}
+            </div>
+          )}
 
           {serverError && <Notice tone="bad">{serverError}</Notice>}
           {Object.values(errors).some(Boolean) && !serverError && <Notice tone="bad">Please fix the highlighted fields.</Notice>}

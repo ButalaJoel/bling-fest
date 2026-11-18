@@ -118,9 +118,20 @@ if (owner) {
   const rows = ((await list.json()) as { data: { rows: { status: string }[] } }).data.rows;
   check("Applicant can't self-approve (status forced to pending)", rows[0]?.status === "pending", `got ${rows[0]?.status}`);
 
+  // Loud injection: on Render, Cloudflare's firewall usually blocks it before it reaches the app.
+  // Either outcome is safe: blocked at the edge (403 that isn't the app's JSON), or the app treats it as text.
   const inj = await fetch(`${BASE}/api/admin/applications?q=${encodeURIComponent("' or 1=1; drop table applications; --")}`, { headers: { Cookie: owner } });
-  const injRows = inj.ok ? ((await inj.json()) as { data: { count: number } }).data.count : -1;
-  check("SQL injection in search is treated as plain text", inj.ok && injRows === 0, `status ${inj.status}, rows ${injRows}`);
+  const injBody = await inj.text();
+  let appAnswered = false, injRows = -1;
+  try { const j = JSON.parse(injBody); appAnswered = typeof j.success === "boolean"; injRows = j.data?.count ?? -1; } catch { /* not the app */ }
+  const edgeBlocked = inj.status === 403 && !appAnswered;
+  check("SQL injection (loud) blocked by firewall or treated as text", edgeBlocked || (inj.ok && injRows === 0),
+    edgeBlocked ? "blocked by the hosting firewall" : `status ${inj.status}, rows ${injRows}`);
+
+  // Quiet injection the firewall lets through: proves the app's own parameterised queries.
+  const quiet = await fetch(`${BASE}/api/admin/applications?q=${encodeURIComponent("zz' or 'a'='a")}`, { headers: { Cookie: owner } });
+  const quietRows = quiet.ok ? ((await quiet.json()) as { data: { count: number } }).data.count : -1;
+  check("SQL injection (quiet) treated as plain text by the app", quiet.ok && quietRows === 0, `status ${quiet.status}, rows ${quietRows}`);
 
   const wild = await fetch(`${BASE}/api/admin/applications?q=%25`, { headers: { Cookie: owner } });
   const wildRows = ((await wild.json()) as { data: { count: number } }).data.count;

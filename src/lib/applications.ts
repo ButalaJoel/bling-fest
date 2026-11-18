@@ -18,7 +18,7 @@ export type ApplicationInput = {
   consent: boolean
 }
 
-export type Errors = Partial<Record<keyof ApplicationInput | 'photos', string>>
+export type Errors = Partial<Record<keyof ApplicationInput | 'photos' | 'captcha', string>>
 
 // Same rules as the database constraints, so people see problems before submitting.
 // The database re-checks everything: this is for usability, not security.
@@ -53,7 +53,7 @@ export function checkPhotos(files: File[]): string | null {
 
 export type SubmitResult = { ok: true; reference: string } | { ok: false; error: string; field?: string }
 
-export async function submitApplication(v: ApplicationInput, photos: File[]): Promise<SubmitResult> {
+export async function submitApplication(v: ApplicationInput, photos: File[], captchaToken = ''): Promise<SubmitResult> {
   const form = new FormData()
   form.set('participation', v.participation)
   form.set('brand_name', v.brand_name.trim())
@@ -66,6 +66,7 @@ export async function submitApplication(v: ApplicationInput, photos: File[]): Pr
   form.set('social_link', v.social_link.trim())
   form.set('additional_info', v.additional_info.trim())
   form.set('consent', String(v.consent))
+  if (captchaToken) form.set('cf-turnstile-response', captchaToken)
   for (const p of photos) form.append('photos', p)
   try {
     const r = await api<{ reference: string }>('/applications', { method: 'POST', form })
@@ -73,5 +74,14 @@ export async function submitApplication(v: ApplicationInput, photos: File[]): Pr
   } catch (e) {
     const err = e as ApiError
     return { ok: false, error: err.message, field: err.field }
+  }
+}
+
+export async function fetchCaptchaSiteKey(): Promise<string | null> {
+  try {
+    const r = await api<{ turnstileSiteKey: string | null }>('/config')
+    return r.turnstileSiteKey
+  } catch {
+    return null
   }
 }

@@ -6,6 +6,8 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { query } from "./lib/db.js";
 import { csrfGuard } from "./middleware/auth.js";
+import { captcha } from "./lib/captcha.js";
+import { env } from "./lib/env.js";
 import authRoutes from "./routes/auth.js";
 import applicationRoutes from "./routes/applications.js";
 import publicRoutes from "./routes/public.js";
@@ -15,6 +17,7 @@ import adminRoutes from "./routes/admin.js";
 // Difference: this server ALSO serves the website, so the site and API share one origin.
 // That's what lets the login cookie be SameSite=Strict, and why no CORS is enabled at all.
 
+const TURNSTILE = "https://challenges.cloudflare.com";
 const app = express();
 app.disable("x-powered-by");
 app.set("trust proxy", 1); // Render sits in front: use the real client IP for rate limits.
@@ -24,17 +27,18 @@ app.use(helmet({
     useDefaults: false,
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
+      // Cloudflare's CAPTCHA script/frame is allowed only when the CAPTCHA is switched on.
+      scriptSrc: ["'self'", ...(captcha.enabled ? [TURNSTILE] : [])],
       styleSrc: ["'self'", "'unsafe-inline'"],
       fontSrc: ["'self'"],
       imgSrc: ["'self'", "data:", "blob:", "https://res.cloudinary.com", "https://api.cloudinary.com"],
-      connectSrc: ["'self'"],
-      frameSrc: ["'none'"],
+      connectSrc: ["'self'", ...(captcha.enabled ? [TURNSTILE] : [])],
+      frameSrc: captcha.enabled ? [TURNSTILE] : ["'none'"],
       frameAncestors: ["'none'"],
       objectSrc: ["'none'"],
       baseUri: ["'self'"],
       formAction: ["'self'"],
-      upgradeInsecureRequests: process.env.NODE_ENV === "production" ? [] : null,
+      upgradeInsecureRequests: env("NODE_ENV") === "production" ? [] : null,
     },
   },
   strictTransportSecurity: { maxAge: 63_072_000, includeSubDomains: true, preload: true },

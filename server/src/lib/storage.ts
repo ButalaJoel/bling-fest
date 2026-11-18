@@ -1,4 +1,4 @@
-import "dotenv/config";
+import { env } from "./env.js";
 import { v2 as cloudinary } from "cloudinary";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -8,18 +8,18 @@ import { randomUUID } from "node:crypto";
 // (no public URL exists); admins get a download link that expires after 5 minutes.
 // Local disk storage is a development fallback only and is refused in production.
 
-const configured = Boolean(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
+const configured = Boolean(env("CLOUDINARY_CLOUD_NAME") && env("CLOUDINARY_API_KEY") && env("CLOUDINARY_API_SECRET"));
 if (configured) {
   cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
+    cloud_name: env("CLOUDINARY_CLOUD_NAME"),
+    api_key: env("CLOUDINARY_API_KEY"),
+    api_secret: env("CLOUDINARY_API_SECRET"),
     secure: true,
   });
 }
 
 export const storageMode: "cloudinary" | "local" | "none" =
-  configured ? "cloudinary" : process.env.NODE_ENV === "production" ? "none" : "local";
+  configured ? "cloudinary" : env("NODE_ENV") === "production" ? "none" : "local";
 
 const LOCAL_DIR = path.resolve(process.cwd(), ".uploads");
 const EXT: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };

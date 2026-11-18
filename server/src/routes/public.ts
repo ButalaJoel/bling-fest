@@ -1,12 +1,18 @@
 import { Router } from "express";
 import { query } from "../lib/db.js";
 import { limitPublicReads } from "../middleware/rateLimits.js";
+import { captcha } from "../lib/captcha.js";
 
 // Public reads. Only safe columns are selected — never contact_email or anything internal.
 const router = Router();
 router.use(limitPublicReads);
 
 const VENDOR_COLS = "id, slug, name, participation, category, location, bio, whatsapp, social_link, is_featured";
+
+// Public settings the website needs (the CAPTCHA site key is public by design).
+router.get("/config", (_req, res) => {
+  res.json({ success: true, data: { turnstileSiteKey: captcha.enabled ? captcha.siteKey : null } });
+});
 
 router.get("/vendors", async (_req, res) => {
   const { rows } = await query(`select ${VENDOR_COLS} from vendors where is_active order by is_featured desc, name`);

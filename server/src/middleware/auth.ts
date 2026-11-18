@@ -2,11 +2,12 @@ import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { query } from "../lib/db.js";
 import type { Role } from "../lib/constants.js";
+import { env } from "../lib/env.js";
 
 // Session = signed JWT inside an httpOnly cookie. JavaScript on the page can't read it,
 // so an XSS bug can't steal the session. Pattern adapted from vana-power-mart requireAdmin.
 
-const isProd = process.env.NODE_ENV === "production";
+const isProd = env("NODE_ENV") === "production";
 // "__Host-" cookies must be Secure, path=/ and have no Domain: browsers enforce it.
 export const COOKIE = isProd ? "__Host-bf_session" : "bf_session";
 const MAX_AGE_MS = 8 * 60 * 60 * 1000;
@@ -15,7 +16,7 @@ export type SessionAdmin = { id: string; email: string; name: string; role: Role
 export interface AuthedRequest extends Request { admin?: SessionAdmin }
 
 function secret() {
-  const s = process.env.JWT_SECRET;
+  const s = env("JWT_SECRET");
   if (!s || s.length < 32) throw new Error("JWT_SECRET missing or too short");
   return s;
 }

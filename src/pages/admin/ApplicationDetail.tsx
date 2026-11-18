@@ -92,7 +92,9 @@ export default function ApplicationDetail() {
             {app.photos.length === 0 ? <p className="mt-2 text-sm text-ink-soft">No photos submitted.</p> : (
               <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
                 {app.photos.map((src, i) => (
-                  <button key={src} onClick={() => setZoom(src)} className="aspect-square overflow-hidden border-2 border-ink"><img src={src} alt={`Submitted photo ${i + 1}`} className="h-full w-full object-cover" /></button>
+                  <button key={src} type="button" onClick={() => setZoom(src)} aria-label={`Enlarge photo ${i + 1}`} className="relative block aspect-square w-full overflow-hidden border-2 border-ink bg-cream-deep">
+                    <img src={src} alt={`Submitted photo ${i + 1}`} className="absolute inset-0 h-full w-full object-cover" />
+                  </button>
                 ))}
               </div>
             )}

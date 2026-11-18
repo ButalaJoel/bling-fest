@@ -1,9 +1,9 @@
-import "dotenv/config";
+import { env } from "./env.js";
 import pg from "pg";
 
 // One shared connection pool. Every query in the app goes through query()/tx() with
 // $1, $2… placeholders — user input is never concatenated into SQL.
-const connectionString = process.env.DATABASE_URL;
+const connectionString = env("DATABASE_URL");
 if (!connectionString) throw new Error("DATABASE_URL is missing from server/.env.");
 
 export const pool = new pg.Pool({ connectionString, max: 10, idleTimeoutMillis: 30_000 });
